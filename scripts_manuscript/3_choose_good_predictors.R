@@ -1,0 +1,1125 @@
+
+##############################################################################
+## Choose good predictors i.e.
+## Test transferability of AusDiab models to LIPID by checking and comparing 
+## predictions of lipid species shared by AusDiab & LIPID 
+##
+## Corresponds to results in Figure 2-4., Supp. Figure 1-2. and Supp. Table 4.
+##############################################################################
+
+library("tidyverse")
+library("magrittr")
+library("glmnet")
+library("parallel")
+library("doParallel")
+library("rsample")
+library("ggrepel")
+library("corpcor")
+library("igraph")
+library("RColorBrewer")
+
+##############################################################################
+##
+##  Load saved working datasets & predictor exclusion lists
+##
+##############################################################################
+
+## Load saved composite datasets
+ausdb_composite <- readRDS("data_derived/Ausdiab_composite_working_data_log_scale.rds")
+lipid_composite <- readRDS("data_derived/LIPID_composite_working_data_log_scale.rds")
+
+## Load splits of composite analysis lipid names  
+Ausdiab_LIPID_lipid_names_collection <- readRDS('data_derived/Ausdiab_LIPID_lipid_names_collection.rds')
+
+## Select variables needed here
+ausdb307 <- ausdb_composite %>% 
+  select(age, sex, bmi, chol_treat, all_of(Ausdiab_LIPID_lipid_names_collection$matching_307c)) %>% 
+  rename(treat=chol_treat)
+lipid307 <- lipid_composite %>% 
+  select(age, sex, bmi, treat_12, all_of(Ausdiab_LIPID_lipid_names_collection$matching_307c)) %>% 
+  rename(treat=treat_12)
+
+
+## Load various predictor exclusion lists from file 2_...
+exclude_predictors_pcor_measure <- readRDS('results/exclude_predictors_pcor_measure.rds')
+
+exclude_pcor_13 <- exclude_predictors_pcor_measure$mad_2$excluded[1:13]
+
+
+## Make AusDb train & test sets for the internal AusDb predictions
+set.seed(101)
+ausdb_split <- initial_split(ausdb307, prop=0.8, strata="bmi", breaks=4)
+ausdb307_train <- training(ausdb_split) #%>% as.data.frame()
+ausdb307_test  <- testing(ausdb_split) #%>% as.data.frame()
+
+
+##############################################################################
+##############################################################################
+##
+## Ausdiab-LIPID individual imputations with/without predictor exclusions
+## Figure 3.
+##
+##############################################################################
+##############################################################################
+
+### Function for this job ###
+
+GlmnetPredictIndividualLipids <- function(train.data, test.data, exclude, alpha) {
+  
+  predictors <- setdiff(colnames(train.data), exclude)
+  
+  train <- train.data %>% select(all_of(predictors)) %>% as.matrix()
+  test <- test.data %>% select(all_of(predictors)) %>% as.matrix()
+  
+  
+  ## Loop through lipids, one at a time
+  predict_data <- sapply(seq(ncol(train)),function(y_) {
+    
+    ## Build ridge model
+    optim_model <- cv.glmnet(x=train[,-y_], 
+                             y=train[,y_,drop=FALSE], 
+                             family='gaussian', 
+                             alpha=alpha, 
+                             lambda=exp(seq(-7,1.25,length.out=200)), 
+                             standardize=TRUE, 
+                             parallel=TRUE)
+    
+    ## Use optimal lambda to predict lipid concentrations
+    y_prediction <- predict(optim_model, test[,-y_], s="lambda.1se")
+    
+    
+    ## Get model statistics
+    pearson <- cor(y_prediction, test[,y_])
+    
+    
+    return(pearson)
+    
+  })
+  
+  names(predict_data) <- predictors
+  return(predict_data)
+}
+
+
+
+## Set clusters ----------------------------------------##
+detectCores(all.tests = FALSE, logical = TRUE)
+cluster <- makeCluster(6, type='FORK')
+registerDoParallel(cl=cluster, cores=6)
+getDoParWorkers()
+
+
+##############################################################################
+## All predictors - no exclusions
+##############################################################################
+
+## Run LIPID analysis -------------------------------------------------------##
+set.seed(707)
+res_lipid_all <- GlmnetPredictIndividualLipids(train.data=ausdb307, 
+                                               test.data=lipid307, 
+                                               exclude=NULL, 
+                                               alpha=0.1)
+## Extract predicted-observed correlations
+hist(res_lipid_all[-c(1,2,3,4)], breaks=100)
+
+
+
+## Run AusDb analysis -------------------------------------------------------##
+set.seed(707)
+res_ausdb_all <- GlmnetPredictIndividualLipids(train.data=ausdb307_train, 
+                                               test.data=ausdb307_test, 
+                                               exclude=NULL, 
+                                               alpha=0.1)
+## Extract predicted-observed correlations
+hist(res_ausdb_all[-c(1,2,3,4)], breaks=100)
+
+
+
+##############################################################################
+## Predictor exclusion (13) based on Partial correlation AusDb-LIPID distances
+##############################################################################
+
+## Run LIPID analysis -------------------------------------------------------##
+set.seed(707)
+res_lipid_pcor_13 <- GlmnetPredictIndividualLipids(train.data=ausdb307, 
+                                                   test.data=lipid307, 
+                                                   exclude=exclude_pcor_13, 
+                                                   alpha=0.1)
+## Extract predicted-observed correlations
+hist(res_lipid_pcor_13[-c(1,2,3,4)], breaks=100)
+
+
+
+## Run AusDb analysis -------------------------------------------------------##
+set.seed(707)
+res_ausdb_pcor_13 <- GlmnetPredictIndividualLipids(train.data=ausdb307_train, 
+                                                   test.data=ausdb307_test, 
+                                                   exclude=exclude_pcor_13, 
+                                                   alpha=0.1)
+## Extract predicted-observed correlations
+hist(res_ausdb_pcor_13[-c(1,2,3,4)], breaks=100)
+
+
+
+
+## Stop clusters  ---------------------------------------##
+unregister_dopar <- function() {
+  env <- foreach:::.foreachGlobals
+  rm(list=ls(name=env), pos=env)
+}
+unregister_dopar()
+
+
+
+##############################################################################
+##
+## Visualise & Summarise results
+##
+##############################################################################
+
+# Put all resulte together 
+stats_per_lipid <- tibble('lipid_name'=names(res_lipid_all[-c(1,2,3,4)]), 'lipid_All'=res_lipid_all[-c(1,2,3,4)], 'ausdb_All'=res_ausdb_all[-c(1,2,3,4)])
+stats_per_lipid <- stats_per_lipid %>% 
+  left_join(tibble('lipid_name'=names(res_lipid_pcor_13[-c(1,2,3,4)]), 'lipid_PCorr13'=res_lipid_pcor_13[-c(1,2,3,4)], 'ausdb_PCorr13'=res_ausdb_pcor_13[-c(1,2,3,4)]), by='lipid_name') 
+
+# Save
+write_csv(stats_per_lipid, 'results/transferability_ausdiab_lipid_w_wo_exclusions.csv')
+# stats_per_lipid <- read_csv('results/transferability_ausdiab_lipid_w_wo_exclusions.csv')
+
+stats_per_lipid_long <- stats_per_lipid %>% 
+  pivot_longer(cols=lipid_All:ausdb_PCorr13, names_to=c("data", "subset"), names_sep="_", values_to="value") %>% 
+  pivot_wider(names_from=data, values_from=value)
+
+
+# Label reduced composite names (82)
+composite_names <- setdiff(Ausdiab_LIPID_lipid_names_collection$matching_307c, Ausdiab_LIPID_lipid_names_collection$matching_307i)
+
+stats_per_lipid_long <- stats_per_lipid_long %>% 
+  mutate(composite=if_else(lipid_name %in% composite_names, "yes", "no"))
+
+write_csv(stats_per_lipid_long, 'results/data_fig_3a.csv')
+
+
+
+## Figures ----------------------------------------------##
+# Figure with lipid labels
+my.colors <- c("royalblue", "firebrick1")
+subset_label <- c(All="All predictors", PCorr13="Discordant predictors removed")
+ggplot(data=stats_per_lipid_long, 
+       aes(x=ausdb, y=lipid)) + 
+  geom_point(size=1.55, alpha=0.5, aes(colour=composite)) + 
+  geom_label_repel(aes(label=ifelse(abs(ausdb-lipid)>0.3, lipid_name,'')), 
+                   box.padding=0.2, label.padding=0.075, point.padding=0.25, label.r=0.1, label.size=0.1, max.time=5, force=2, force_pull=1, 
+                   segment.color='grey50', segment.size=0.2, min.segment.length=0.2, size=1.25, nudge_x=-0.01, nudge_y=-0.01, max.overlaps=20) + 
+  geom_abline(slope=1, intercept=0, colour="grey30") + 
+  geom_abline(slope=1, intercept=-0.3, colour="grey50", size=0.25) + 
+  geom_abline(slope=1, intercept=0.3, colour="grey50", size=0.25) + 
+  theme_bw(base_size=8) + 
+  scale_x_continuous(breaks=seq(0,1,0.1)) + 
+  scale_y_continuous(breaks=seq(0,1,0.1)) + 
+  scale_color_manual(values=my.colors) + 
+  labs(x="AusDiab", y="LIPID") + 
+  facet_wrap(~subset, scales="fixed", ncol=2, labeller=labeller(subset=subset_label)) + 
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8)) # strip.text=element_text(face=NULL, size=12)
+
+ggsave("figures/adj_transferability_ausdiab_lipid_scatter_w_wo_exclusions_3a.pdf", width=12, height=7, scale=1, units="cm")
+ggsave("figures/adj_transferability_ausdiab_lipid_scatter_w_wo_exclusions_3a.tiff", width=12, height=7, scale=1, units="cm")
+ggsave("figures/adj_transferability_ausdiab_lipid_scatter_w_wo_exclusions_3a.svg", width=12, height=7, scale=1, units="cm")
+
+# Figure without lipid labels
+ggplot(data=stats_per_lipid_long, 
+       aes(x=ausdb, y=lipid)) + 
+  geom_point(size=1.5, alpha=0.5, aes(colour=composite)) + 
+  geom_abline(slope=1, intercept=0, colour="grey30") + 
+  geom_abline(slope=1, intercept=-0.3, colour="grey50", size=0.25) + 
+  geom_abline(slope=1, intercept=0.3, colour="grey50", size=0.25) + 
+  theme_bw(base_size=8) + 
+  scale_x_continuous(breaks=seq(0,1,0.1)) + 
+  scale_y_continuous(breaks=seq(0,1,0.1)) + 
+  scale_color_manual(values=my.colors) + 
+  labs(x="AusDiab", y="LIPID") + 
+  facet_wrap(~subset, scales="fixed", ncol=2, labeller=labeller(subset=subset_label)) + 
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6))
+
+ggsave("figures/adj_transferability_ausdiab_lipid_scatter_w_wo_exclusions_nolabel_3a.pdf", width=12, height=6.6, scale=1, units="cm")
+ggsave("figures/adj_transferability_ausdiab_lipid_scatter_w_wo_exclusions_nolabel_3a.tiff", width=12, height=6.6, scale=1, units="cm")
+ggsave("figures/adj_transferability_ausdiab_lipid_scatter_w_wo_exclusions_nolabel_3a.svg", width=12, height=6.6, scale=1, units="cm")
+
+
+
+########### Quantify improvements in predictions post-exclusions ##############
+
+## Informative difference in ausdb-lipid abs. departures 
+##   before and after 13 removal --------------------------------------------##
+ausdb_lipid_delta_improvement <- stats_per_lipid %>% 
+  filter(!(lipid_name %in% exclude_pcor_13)) %>% 
+  mutate(delta_All=abs(ausdb_All-lipid_All)) %>% 
+  mutate(delta_PCorr13=abs(ausdb_PCorr13-lipid_PCorr13)) %>% 
+  mutate(delta_improvement=delta_All-delta_PCorr13)
+
+
+## Histogram of correlations
+ggplot(ausdb_lipid_delta_improvement, aes(delta_improvement)) +
+  geom_histogram(binwidth=0.005, colour="white", size=0.1, fill="firebrick2") + 
+  theme_bw(base_size=8) + 
+  scale_x_continuous(breaks=seq(-0.05,0.15,0.05)) + 
+  labs(title="Improvement in prediction accuracy", subtitle="(relative to AusDiab reference)", x="Improvement in correlation") + 
+  theme(plot.title=element_text(size=8, hjust = 0.5), plot.subtitle=element_text(size=8, hjust = 0.5), axis.text=element_text(size=6))
+
+ggsave("figures/adj_transferability_prediction_rel_improvement_w_exclusions_3b.pdf", width=6, height=6, scale=1, units="cm")
+ggsave("figures/adj_transferability_prediction_rel_improvement_w_exclusions_3b.tiff", width=6, height=6, scale=1, units="cm")
+ggsave("figures/adj_transferability_prediction_rel_improvement_w_exclusions_3b.svg", width=6, height=6, scale=1, units="cm")
+
+
+# Improvement in prediction accuracy 
+# as difference between ausdb-lipid prediction accuracy absolute departures 
+# before and after the removal of 13 lipids 
+
+
+
+##############################################################################
+##############################################################################
+##
+## Ausdiab-LIPID imputations with 90, 75, 50, 25% of full predictors set ...
+## Figure 4.
+##
+##############################################################################
+##############################################################################
+
+## Function for this job 
+GlmnetPredictSubsetOfLipids <- function(train.data, test.data, exclude, fraction, n.iter, alpha) {
+  
+  lipid.names <- colnames(select(train.data, -all_of(c('age', 'sex', 'bmi', 'treat'))))
+  lipid.names <- setdiff(lipid.names, exclude)
+  n.targets <- round(length(lipid.names) * fraction)
+  set.seed(707)
+  
+  ## Loop through itterations
+  result <- lapply(seq(n.iter),function(iter_) {
+    
+    ## Sample target lipids
+    targets <- sample(lipid.names, n.targets)
+    
+    train_x <- train.data %>% select(-all_of(targets)) %>% as.matrix()
+    train_y <- train.data %>% select(all_of(targets)) %>% as.matrix()
+    
+    test_x <- test.data %>% select(-all_of(targets)) %>% as.matrix()
+    test_y <- test.data %>% select(all_of(targets)) %>% as.matrix()
+    
+    ## Loop through lipids, one at a time
+    predict_data <- lapply(seq(ncol(train_y)),function(y_) {
+      
+      ## Build ridge model
+      optim_model <- cv.glmnet(x=train_x, 
+                               y=train_y[,y_,drop=FALSE], 
+                               family='gaussian', 
+                               alpha=alpha, 
+                               lambda=exp(seq(-6,1,length.out=100)), 
+                               standardize=TRUE, 
+                               parallel=TRUE)
+      
+      ## Use optimal lambda to predict lipid concentrations
+      y_prediction_min <- predict(optim_model, test_x, s=optim_model$lambda.min)
+      y_prediction_1se <- predict(optim_model, test_x, s=optim_model$lambda.1se)
+      
+      ## Get model statistics
+      stats <- c(itteration=iter_, 
+                 lipid=colnames(train_y)[y_], 
+                 pearson_min=cor(y_prediction_min, test_y[,y_]), 
+                 pearson_1se=cor(y_prediction_1se, test_y[,y_]))
+      
+      
+      return(list('pred_1se'=y_prediction_1se, 'stats'=stats))
+      
+    })
+    
+    ## Merge statistics
+    stats <- exec(rbind, !!!map(predict_data, 'stats'))
+    
+    ## Merge predicted lipid data (if needed)
+    predicted_y_1se <- exec(cbind, !!!map(predict_data, 'pred_1se')) %>% t()
+    
+    ## Add lipid names
+    predicted_y_1se <- cbind(stats[,'lipid', drop=FALSE], predicted_y_1se)
+    
+    
+    return(list('pred_1se'=predicted_y_1se, 'stats'=stats))
+    
+  })
+  
+  ## You only need stats for now
+  all_stats <- exec(rbind, !!!map(result, 'stats'))
+  all_stats <- as_tibble(all_stats) %>% mutate(across(.cols=c(1,3:4), .fns=as.numeric))
+  
+  return(all_stats)
+  
+}
+
+
+## Set clusters -----------------------------------------##
+detectCores(all.tests = FALSE, logical = TRUE)
+cluster <- makeCluster(6, type='FORK')
+registerDoParallel(cl=cluster, cores=6)
+getDoParWorkers() 
+
+## Run analysis 
+## 10% --------------------------------------------------##
+result_10_lipid <- GlmnetPredictSubsetOfLipids(train.data=ausdb307, test.data=lipid307, 
+                                               exclude=exclude_pcor_13, fraction=0.1, n.iter=100, alpha=0.1)
+
+result_10_audb <- GlmnetPredictSubsetOfLipids(train.data=ausdb307_train, test.data=ausdb307_test, 
+                                              exclude=exclude_pcor_13, fraction=0.1, n.iter=100, alpha=0.1)
+
+## 25% --------------------------------------------------##
+result_25_lipid <- GlmnetPredictSubsetOfLipids(train.data=ausdb307, test.data=lipid307, 
+                                               exclude=exclude_pcor_13, fraction=0.25, n.iter=40, alpha=0.1)
+
+result_25_audb <- GlmnetPredictSubsetOfLipids(train.data=ausdb307_train, test.data=ausdb307_test, 
+                                              exclude=exclude_pcor_13, fraction=0.25, n.iter=40, alpha=0.1)
+
+## 50% --------------------------------------------------##
+result_50_lipid <- GlmnetPredictSubsetOfLipids(train.data=ausdb307, test.data=lipid307, 
+                                               exclude=exclude_pcor_13, fraction=0.5, n.iter=20, alpha=0.1)
+
+result_50_audb <- GlmnetPredictSubsetOfLipids(train.data=ausdb307_train, test.data=ausdb307_test, 
+                                              exclude=exclude_pcor_13, fraction=0.5, n.iter=20, alpha=0.1)
+
+## 75% --------------------------------------------------##
+result_75_lipid <- GlmnetPredictSubsetOfLipids(train.data=ausdb307, test.data=lipid307, 
+                                               exclude=exclude_pcor_13, fraction=0.75, n.iter=14, alpha=0.1)
+
+result_75_audb <- GlmnetPredictSubsetOfLipids(train.data=ausdb307_train, test.data=ausdb307_test, 
+                                              exclude=exclude_pcor_13, fraction=0.75, n.iter=14, alpha=0.1)
+
+
+## Stop clusters ----------------------------------------##
+stopCluster(cl=cluster)
+stopImplicitCluster()
+getDoParWorkers() 
+
+# in case of parallel trouble run this:
+unregister_dopar <- function() {
+  env <- foreach:::.foreachGlobals
+  rm(list=ls(name=env), pos=env)
+}
+unregister_dopar()
+
+
+
+##############################################################################
+##
+## Visualise & Summarise results
+##
+##############################################################################
+
+## Bind all stats in long format
+resamp_results <- bind_rows(list(AusDiab_10=result_10_audb, 
+                                 AusDiab_25=result_25_audb, 
+                                 AusDiab_50=result_50_audb, 
+                                 AusDiab_75=result_75_audb, 
+                                 LIPID_10=result_10_lipid, 
+                                 LIPID_25=result_25_lipid, 
+                                 LIPID_50=result_50_lipid, 
+                                 LIPID_75=result_75_lipid), 
+                            .id="analysis") %>% 
+  separate(col=analysis, sep="_", into=c("data", "target_pct"), remove=FALSE, convert=FALSE)
+
+write_csv(resamp_results, 'results/transferability_resample_trial.csv')
+# resamp_results <- read_csv('results/transferability_resample_trial.csv')
+
+rm(list = ls()[grep("result_", ls())])
+
+## Quick summary of all analyses
+resamp_results %>% 
+  group_by(analysis) %>% 
+  summarise(ave_corr.min=mean(pearson_min), sd.min=sd(pearson_min), 
+            ave_corr.1se=mean(pearson_1se), sd.1se=sd(pearson_1se))
+
+
+###############################################################################
+## Summary across individual lipid species (for plots below)
+resamp_stats_per_lipid <- resamp_results %>% 
+  group_by(data, target_pct, lipid) %>% 
+  summarise(r=mean(pearson_min), r_min=min(pearson_min), r_max=max(pearson_min), 
+            r.1se=mean(pearson_1se), r.1se_min=min(pearson_1se), r.1se_max=max(pearson_1se)) %>% 
+  ungroup()
+
+# check if all are targeted (sampled) at least once in each setting & select those 
+targeted <- resamp_stats_per_lipid %>% count(lipid) %>% filter(n==8) %>% pull(lipid) # 294+13=307
+resamp_stats_per_lipid <- resamp_stats_per_lipid %>% filter(lipid %in% targeted)
+
+write_csv(resamp_stats_per_lipid, 'results/data_fig_4a.csv')
+
+
+## Range/stability plots
+target_pct_label <- c('10'="90% of full predictor set", '25'="75% of full predictor set", '50'="50% of full predictor set", '75'="25% of full predictor set")
+ggplot(resamp_stats_per_lipid, 
+       aes(reorder(lipid, rep(r[1:294], 8)), r.1se, colour=data)) + 
+  geom_point(size=1, alpha=0.5) + 
+  geom_errorbar(aes(ymax=r.1se_max, ymin=r.1se_min), size=0.2) + 
+  # geom_hline(yintercept=0.5, linetype="dashed", color = "gray30") + 
+  theme_bw(base_size=8) + 
+  scale_colour_manual(values=c("dodgerblue", "tomato")) + 
+  scale_x_discrete(breaks=NULL) + 
+  labs(x="lipid species", y="Correlation (Range)") + 
+  facet_wrap(~target_pct, scales="fixed", ncol=1, labeller=labeller(target_pct=target_pct_label)) + 
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6), legend.position="bottom")
+# ggsave("figures/transferability_resample_ausdiab_lipid_ranges.pdf", width=8, height=9, units="in")
+
+ggsave("figures/adj_transferability_resample_ausdiab_lipid_ranges_4a.pdf", width=12, height=14, scale=1, units="cm")
+ggsave("figures/adj_transferability_resample_ausdiab_lipid_ranges_4a.tiff", width=12, height=14, scale=1, units="cm")
+ggsave("figures/adj_transferability_resample_ausdiab_lipid_ranges_4a.svg", width=12, height=14, scale=1, units="cm")
+
+
+
+###############################################################################
+## Make wide data format (for plots below)
+composite_names <- setdiff(Ausdiab_LIPID_lipid_names_collection$matching_307c, Ausdiab_LIPID_lipid_names_collection$matching_307i)
+
+resamp_stats_per_lipid_wide <- resamp_stats_per_lipid %>% 
+  pivot_wider(names_from=data, values_from=colnames(resamp_stats_per_lipid)[4:9]) %>% 
+  select(target_pct, lipid, r_AusDiab, r_LIPID, r.1se_AusDiab, r.1se_LIPID) %>% 
+  mutate(composite=if_else(lipid %in% composite_names, "yes", "no"))
+
+write_csv(resamp_stats_per_lipid_wide, 'results/data_fig_4b.csv')
+
+
+## AusDiab vs. LIPID scatter plots
+
+# Figure without lipid labels
+ggplot(data=resamp_stats_per_lipid_wide, 
+       aes(x=r.1se_AusDiab, y=r.1se_LIPID)) + 
+  geom_point(aes(colour=composite), size=1.25, alpha=0.5) + 
+  geom_abline(slope=1, intercept=0, colour="grey30") + 
+  geom_abline(slope=1, intercept=-0.3, colour="grey50", size=0.25) + 
+  geom_abline(slope=1, intercept=0.3, colour="grey50", size=0.25) + 
+  theme_bw(base_size=8) + 
+  scale_x_continuous(breaks=seq(0,1,0.1)) + 
+  scale_y_continuous(breaks=seq(0,1,0.1)) + 
+  scale_color_manual(values=my.colors) + 
+  labs(x="AusDiab", y="LIPID") + 
+  facet_wrap(~target_pct, scales="fixed", ncol=2, labeller=labeller(target_pct=target_pct_label)) + 
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6))
+
+ggsave("figures/adj_transferability_resample_ausdiab_lipid_scatter_nolabel_4b.pdf", width=12, height=10.5, scale=1, units="cm")
+ggsave("figures/adj_transferability_resample_ausdiab_lipid_scatter_nolabel_4b.tiff", width=12, height=10.5, scale=1, units="cm")
+ggsave("figures/adj_transferability_resample_ausdiab_lipid_scatter_nolabel_4b.svg", width=12, height=10.5, scale=1, units="cm")
+
+
+
+##############################################################################
+##############################################################################
+##
+## Ausdiab-LIPID imputations with reference size of 5000, 1000, 200, 50 obs.
+## Supp. Figure 2.
+##
+##############################################################################
+##############################################################################
+
+
+## Function for this job 
+GlmnetPredictSubsetOfObs <- function(train.data, test.data, exclude, train.size, n.iter, alpha) {
+  
+  lipid.names <- colnames(select(train.data, -all_of(c('age', 'sex', 'bmi', 'treat'))))
+  lipid.names <- setdiff(lipid.names, exclude)
+  
+  # set.seed(707)
+  
+  ## Loop through itterations
+  result <- lapply(seq(n.iter),function(iter_) {
+    
+    ## Sample subset of training observations
+    train.data.sub <- train.data %>% slice_sample(n=train.size)
+    
+    train_x <- train.data.sub %>% select(all_of(lipid.names), age, sex, bmi, treat) %>% as.matrix()
+    train_y <- train.data.sub %>% select(all_of(lipid.names)) %>% as.matrix()
+    
+    test_x <- test.data %>% select(all_of(lipid.names), age, sex, bmi, treat) %>% as.matrix()
+    test_y <- test.data %>% select(all_of(lipid.names)) %>% as.matrix()
+    
+    ## Loop through lipids, one at a time
+    predict_data <- lapply(seq(ncol(train_y)),function(y_) {
+      
+      ## Build ridge model
+      optim_model <- cv.glmnet(x=train_x[,-y_], 
+                               y=train_y[,y_,drop=FALSE], 
+                               family='gaussian', 
+                               alpha=alpha, 
+                               nlambda=200, 
+                               standardize=TRUE, 
+                               parallel=TRUE)
+      
+      ## Use optimal lambda to predict lipid concentrations
+      y_prediction_min <- predict(optim_model, test_x[,-y_], s=optim_model$lambda.min)
+      y_prediction_1se <- predict(optim_model, test_x[,-y_], s=optim_model$lambda.1se)
+      
+      ## Get model statistics
+      stats <- c(itteration=iter_, 
+                 lipid=colnames(train_y)[y_], 
+                 pearson_min=cor(y_prediction_min, test_y[,y_]), 
+                 pearson_1se=cor(y_prediction_1se, test_y[,y_]))
+      
+      
+      return(list('pred_min'=y_prediction_min, 'stats'=stats))
+      
+    })
+    
+    ## Merge statistics
+    stats <- exec(rbind, !!!map(predict_data, 'stats'))
+    
+    ## Merge predicted lipids (if needed), add iter. no. & lipid names
+    predicted_y_min <- exec(cbind, !!!map(predict_data, 'pred_min'))
+    predicted_y_min <- cbind(as.numeric(iter_), predicted_y_min)
+    colnames(predicted_y_min) <- c("iteration", colnames(test_y))
+    
+    return(list('pred_min'=predicted_y_min, 'stats'=stats))
+    
+  })
+  
+  ## You only need stats for now
+  all_stats <- exec(rbind, !!!map(result, 'stats'))
+  all_stats <- as_tibble(all_stats) %>% mutate(across(.cols=c(1,3:4), .fns=as.numeric))
+  
+  all_preds <- exec(rbind, !!!map(result, 'pred_min'))
+  all_preds <- as_tibble(all_preds) %>% mutate(across(.fns=as.numeric))
+  
+  # return(list('stats'=all_stats, 'predictions'=all_preds))
+  return(all_stats)
+  
+}
+
+
+## Set clusters -----------------------------------------##
+detectCores(all.tests = FALSE, logical = TRUE)
+cluster <- makeCluster(6, type='FORK')
+registerDoParallel(cl=cluster, cores=6)
+getDoParWorkers() 
+
+## Run analysis 
+## 5000 -------------------------------------------------##
+result_5k_lipid <- GlmnetPredictSubsetOfObs(train.data=ausdb307, test.data=lipid307, 
+                                               exclude=exclude_pcor_13, train.size=5000, n.iter=10, alpha=0.1)
+
+result_5k_audb <- GlmnetPredictSubsetOfObs(train.data=ausdb307_train, test.data=ausdb307_test, 
+                                              exclude=exclude_pcor_13, train.size=5000, n.iter=10, alpha=0.1)
+
+## Run analysis 
+## 1000 -------------------------------------------------##
+result_1k_lipid <- GlmnetPredictSubsetOfObs(train.data=ausdb307, test.data=lipid307, 
+                                            exclude=exclude_pcor_13, train.size=1000, n.iter=10, alpha=0.1)
+
+result_1k_audb <- GlmnetPredictSubsetOfObs(train.data=ausdb307_train, test.data=ausdb307_test, 
+                                           exclude=exclude_pcor_13, train.size=1000, n.iter=10, alpha=0.1)
+
+## Run analysis 
+## 200 --------------------------------------------------##
+result_200_lipid <- GlmnetPredictSubsetOfObs(train.data=ausdb307, test.data=lipid307, 
+                                            exclude=exclude_pcor_13, train.size=200, n.iter=10, alpha=0.1)
+
+result_200_audb <- GlmnetPredictSubsetOfObs(train.data=ausdb307_train, test.data=ausdb307_test, 
+                                           exclude=exclude_pcor_13, train.size=200, n.iter=10, alpha=0.1)
+
+## Run analysis 
+## 50 ---------------------------------------------------##
+result_50_lipid <- GlmnetPredictSubsetOfObs(train.data=ausdb307, test.data=lipid307, 
+                                            exclude=exclude_pcor_13, train.size=50, n.iter=10, alpha=0.1)
+
+result_50_audb <- GlmnetPredictSubsetOfObs(train.data=ausdb307_train, test.data=ausdb307_test, 
+                                           exclude=exclude_pcor_13, train.size=50, n.iter=10, alpha=0.1)
+
+# With reducing sample size some prediction are becoming all same (with variance 0) i.e. bad model, 
+# more so in _1se version of predictions.. so I chose to focus on _min predictions instead 
+
+## Stop clusters ----------------------------------------##
+stopCluster(cl=cluster)
+stopImplicitCluster()
+getDoParWorkers() 
+
+# in case of parallel trouble run this:
+unregister_dopar <- function() {
+  env <- foreach:::.foreachGlobals
+  rm(list=ls(name=env), pos=env)
+}
+unregister_dopar()
+
+
+
+##############################################################################
+##
+## Visualise & Summarise results
+##
+##############################################################################
+
+## Bind all stats in long format
+subsets_results <- bind_rows(list(AusDiab_5000=result_5k_audb, 
+                                 AusDiab_1000=result_1k_audb, 
+                                 AusDiab_200=result_200_audb, 
+                                 AusDiab_50=result_50_audb, 
+                                 LIPID_5000=result_5k_lipid, 
+                                 LIPID_1000=result_1k_lipid, 
+                                 LIPID_200=result_200_lipid, 
+                                 LIPID_50=result_50_lipid), 
+                            .id="analysis") %>% 
+  separate(col=analysis, sep="_", into=c("data", "train_size"), remove=FALSE, convert=FALSE)
+
+write_csv(subsets_results, 'results/transferability_train_sample_size_trial.csv')
+# subsets_results <- read_csv('results/transferability_train_sample_size_trial.csv')
+
+rm(list = ls()[grep("result_", ls())])
+
+## Quick summary of all analyses
+subsets_results %>% 
+  group_by(analysis) %>% 
+  summarise(ave_corr.min=mean(pearson_min, na.rm=T), sd.min=sd(pearson_min, na.rm=T), 
+            ave_corr.1se=mean(pearson_1se, na.rm=T), sd.1se=sd(pearson_1se, na.rm=T))
+
+
+###############################################################################
+## Summary across individual lipid species (for plots below)
+subsets_stats_per_lipid <- subsets_results %>% 
+  group_by(data, train_size, lipid) %>% 
+  summarise(r=mean(pearson_min, na.rm=T), r_min=min(pearson_min, na.rm=T), r_max=max(pearson_min, na.rm=T), 
+            r.1se=mean(pearson_1se, na.rm=T), r.1se_min=min(pearson_1se, na.rm=T), r.1se_max=max(pearson_1se, na.rm=T)) %>% 
+  ungroup() %>% 
+  arrange(desc(as.numeric(train_size))) %>% 
+  mutate(train_size=factor(train_size, level=c('5000','1000','200','50')))
+
+
+## Range/stability plots
+training_sample_size_label <- c('5000'="5000 training observations", '1000'="1000 training observations", '200'="200 training observations", '50'="50 training observations")
+ggplot(subsets_stats_per_lipid, 
+       aes(reorder(lipid, rep(r[1:294], 8)), r, colour=data)) + 
+  geom_point(size=1, alpha=0.5) + 
+  geom_errorbar(aes(ymax=r_max, ymin=r_min), size=0.2) + 
+  geom_hline(yintercept=0.5, linetype="dashed", color = "gray30") + 
+  theme_bw(base_size=8) + 
+  scale_colour_manual(values=c("royalblue2", "firebrick2")) + 
+  scale_x_discrete(breaks=NULL) + 
+  labs(x="lipid species", y="Correlation (Range)") + 
+  facet_wrap(~train_size, scales="fixed", ncol=1, labeller=labeller(train_size=training_sample_size_label)) + 
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6), legend.position="bottom")
+
+ggsave("figures/adj_transferability_train_sample_size_ausdiab_lipid_ranges_supp2a.pdf", width=12, height=14, scale=1, units="cm")
+ggsave("figures/adj_transferability_train_sample_size_ausdiab_lipid_ranges_supp2a.tiff", width=12, height=14, scale=1, units="cm")
+ggsave("figures/adj_transferability_train_sample_size_ausdiab_lipid_ranges_supp2a.svg", width=12, height=14, scale=1, units="cm")
+
+
+
+###############################################################################
+## Make wide data format (for plots below)
+subsets_stats_per_lipid_wide <- subsets_stats_per_lipid %>% 
+  pivot_wider(names_from=data, values_from=colnames(subsets_stats_per_lipid)[4:9]) %>% 
+  select(train_size, lipid, r_AusDiab, r_LIPID, r.1se_AusDiab, r.1se_LIPID)
+
+
+## AusDiab vs. LIPID scatter plots
+
+# Figure without lipid labels
+ggplot(data=subsets_stats_per_lipid_wide %>% 
+         mutate(composite=if_else(lipid %in% composite_names, "yes", "no")), 
+       aes(x=r_AusDiab, y=r_LIPID)) + 
+  geom_point(aes(colour=composite), size=1.25, alpha=0.5) + 
+  geom_abline(slope=1, intercept=0, colour="grey30") + 
+  geom_abline(slope=1, intercept=-0.3, colour="grey50", size=0.25) + 
+  geom_abline(slope=1, intercept=0.3, colour="grey50", size=0.25) + 
+  theme_bw(base_size=8) + 
+  scale_x_continuous(breaks=seq(0,1,0.1)) + 
+  scale_y_continuous(breaks=seq(0,1,0.1)) + 
+  scale_color_manual(values=my.colors) + 
+  labs(x="AusDiab", y="LIPID") + 
+  facet_wrap(~train_size, scales="fixed", ncol=2, labeller=labeller(train_size=training_sample_size_label)) + 
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6))
+# ggsave("figures/transferability_train_sample_size_ausdiab_lipid_scatter_nolabel.pdf", width=8, height=7.25, units="in")
+
+ggsave("figures/adj_transferability_train_sample_size_ausdiab_lipid_scatter_nolabel_supp2b.pdf", width=12, height=10.5, scale=1, units="cm")
+ggsave("figures/adj_transferability_train_sample_size_ausdiab_lipid_scatter_nolabel_supp2b.tiff", width=12, height=10.5, scale=1, units="cm")
+ggsave("figures/adj_transferability_train_sample_size_ausdiab_lipid_scatter_nolabel_supp2b.svg", width=12, height=10.5, scale=1, units="cm")
+
+
+
+
+
+##############################################################################
+##############################################################################
+##
+## Using sparse inverse covariance / partial correlation mat. as graph models
+## Figure 2. and Supp. Figure 1.
+##
+##############################################################################
+##############################################################################
+
+library("corpcor")
+library("igraph")
+library("RColorBrewer")
+
+## Select variables needed here
+
+# AusDiab
+ausdb307.mat <- ausdb_composite %>% 
+  select(all_of(Ausdiab_LIPID_lipid_names_collection$matching_307c)) %>% as.matrix()
+
+ausdb294.mat <- ausdb_composite %>% 
+  select(all_of(Ausdiab_LIPID_lipid_names_collection$matching_307c)) %>% 
+  select(-all_of(exclude_pcor_13)) %>% as.matrix()
+
+# for LIPID filter on baseline obs
+lipid.ID <- read_csv(file="/Volumes/labs/Metabolomics/Projects/LIPID/Databases/2017_09_12 - Lipid Trial Database - Mapped to Ausdiab.csv", 
+                  col_select = c(ID, period)) %>% mutate(ID=as.character(ID))
+lipid307.mat <- lipid_composite %>% 
+  select(id, all_of(Ausdiab_LIPID_lipid_names_collection$matching_307c)) %>% 
+  left_join(lipid.ID, by=c("id"="ID")) %>% 
+  filter(period==0) %>% select(-c(id, period)) %>% as.matrix()
+
+lipid294.mat <- lipid_composite %>% 
+  select(id, all_of(Ausdiab_LIPID_lipid_names_collection$matching_307c)) %>% 
+  left_join(lipid.ID, by=c("id"="ID")) %>% 
+  filter(period==0) %>% select(-c(id, period)) %>%
+  select(-all_of(exclude_pcor_13)) %>% as.matrix()
+
+all.equal(colnames(ausdb294.mat), colnames(lipid294.mat)) # TRUE
+
+
+###############################################################################
+## AusDiab - corpcor
+###############################################################################
+
+ausdb.pcor <- pcor.shrink(ausdb307.mat, verbose=T) # estimated lambda=0.00151
+ausdb.pcor <- pcor.shrink(ausdb294.mat, verbose=T) # estimated lambda=0.0015
+ausdb.pcor[ausdb.pcor == 1] <- 0
+ausdb.pcor[1:6,1:6]
+307*307 # 94249
+(94249-sum(abs(ausdb.pcor)<=0.1)) # 2022
+294*294 # 86436
+(86436-sum(abs(ausdb.pcor)<=0.1))/2 # 954
+(86436-sum(abs(ausdb.pcor)<0.0955))/2 # 1026
+
+
+hist(ausdb.pcor, breaks=50)
+
+ausdb.pcor[abs(ausdb.pcor) < 0.0955] <- 0 # retain ~ 1000 edges
+
+hist(ausdb.pcor, breaks=50)
+sum(abs(ausdb.pcor)>0)/2 # 1026
+
+
+g <- graph_from_adjacency_matrix(
+  ausdb.pcor,
+  mode = "undirected",
+  weighted = TRUE,
+  diag = FALSE,
+  add.colnames = NULL,
+  add.rownames = NA
+)
+
+V(g); V(g)$name
+E(g); E(g)$weight
+
+lipid_family <- str_replace(V(g)$name, pattern="\\(.+\\)$", replacement="")
+lipid_family <- str_replace(lipid_family, pattern="\\(.+\\)\\ \\[.+\\]$", replacement="")
+length(unique(lipid_family)) # 19
+
+V(g)$label <- NA
+V(g)$lipid.family <- lipid_family
+
+lipid.family.index <- factor(lipid_family, labels=as.character(1:19))
+V(g)$lipid.family.index <- lipid.family.index
+
+display.brewer.all()
+# mycolours <- colorRampPalette(brewer.pal(12, "Set3"))(length(unique(lipid_family)))
+mycolours <- c(brewer.pal(9, "Set1")[1], 
+               brewer.pal(9, "Set1")[3], 
+               brewer.pal(3, "Greys")[1], 
+               brewer.pal(9, "Set1")[2], 
+               brewer.pal(8, "Dark2")[1], 
+               brewer.pal(9, "Set1")[4], 
+               brewer.pal(12, "Set3")[1], brewer.pal(12, "Set3")[7], brewer.pal(12, "Set3")[11], 
+               brewer.pal(9, "Set1")[5], brewer.pal(12, "Set3")[6], brewer.pal(8, "Set2")[7], 
+               brewer.pal(9, "Set1")[8], brewer.pal(12, "Set3")[12], brewer.pal(12, "Set3")[8], brewer.pal(12, "Set3")[2], 
+               brewer.pal(9, "Set1")[7], brewer.pal(12, "Set3")[5], brewer.pal(12, "Set3")[9]) 
+
+V(g)$color <- mycolours[V(g)$lipid.family.index]
+
+
+modul.louvian <- cluster_louvain(g, weights=abs(E(g)$weight))
+modul.info <- cluster_infomap(g, e.weights=abs(E(g)$weight), v.weights=NULL, nb.trials=100, modularity=TRUE)
+
+layouts <- grep("^layout_", ls("package:igraph"), value=TRUE)[-1]
+
+
+## Circle layout ##
+pdf(file = "figures/network_ausdb_circle.pdf", width = 8, height = 8)
+plot(g, layout=layout_in_circle, 
+     vertex.color=V(g)$color, vertex.frame.color="grey25", vertex.size=2.5, 
+     edge.color="gray70", edge.width=(E(g)$weight*3), main="AusDiab matching lipids", 
+     mark.groups=modul.louvian, mark.col=adjustcolor(c("lightsteelblue1"), alpha=.001), mark.border=NA, mark.shape=1, 
+     margin=rep(-0.05, 4), asp=0)
+legend(x=-1.2, y=-0.4, unique(lipid_family), pch=21,
+       col="#777777", pt.bg=mycolours, pt.cex=1.75, cex=.7, bty="n", ncol=1)
+dev.off()
+
+
+## Graphplot layout ##
+pdf(file = "figures/network_ausdb_graphplot_294_9.pdf", width = 7.5, height = 7)
+plot(g, layout=layout_with_graphopt, 
+     vertex.color=V(g)$color, vertex.frame.color="grey25", vertex.size=2.75, 
+     edge.color="gray70", edge.width=(E(g)$weight*3), main="AusDiab", 
+     mark.groups=modul.louvian, mark.col=adjustcolor(c("lightsteelblue"), alpha=.01), mark.border=NA, mark.shape=1, 
+     margin=rep(-0.04, 4), asp=0)
+legend(x=-1.33, y=+0.3, unique(lipid_family), pch=21,
+       col="#777777", pt.bg=mycolours, pt.cex=2, cex=1.1, bty="n", ncol=1)
+dev.off()
+
+
+
+
+###############################################################################
+## LIPID - corpcor
+###############################################################################
+
+lipid.pcor <- pcor.shrink(lipid307.mat, verbose=T) # estimated lambda=0.0025
+lipid.pcor <- pcor.shrink(lipid294.mat, verbose=T) # estimated lambda=0.0024
+lipid.pcor[lipid.pcor == 1] <- 0
+lipid.pcor[1:6,1:6]
+307*307 # 94249
+(94249-sum(abs(lipid.pcor)<=0.1)) # 2003
+294*294 # 86436
+(86436-sum(abs(lipid.pcor)<=0.1))/2 # 842
+(86436-sum(abs(lipid.pcor)<0.0895))/2 # 1025
+
+
+hist(lipid.pcor, breaks=50)
+
+lipid.pcor[abs(lipid.pcor) < 0.0895] <- 0 # retain ~ 1000 edges
+
+hist(lipid.pcor, breaks=50)
+sum(abs(lipid.pcor)>0)/2 # 1025
+
+
+g <- graph_from_adjacency_matrix(
+  lipid.pcor,
+  mode = "undirected",
+  weighted = TRUE,
+  diag = FALSE,
+  add.colnames = NULL,
+  add.rownames = NA
+)
+
+V(g); V(g)$name
+E(g); E(g)$weight
+
+lipid_family <- str_replace(V(g)$name, pattern="\\(.+\\)$", replacement="")
+lipid_family <- str_replace(lipid_family, pattern="\\(.+\\)\\ \\[.+\\]$", replacement="")
+length(unique(lipid_family)) # 19
+
+V(g)$label <- NA
+V(g)$lipid.family <- lipid_family
+
+lipid.family.index <- factor(lipid_family, labels=as.character(1:19))
+V(g)$lipid.family.index <- lipid.family.index
+
+display.brewer.all()
+# mycolours <- colorRampPalette(brewer.pal(12, "Set3"))(length(unique(lipid_family)))
+mycolours <- c(brewer.pal(9, "Set1")[1], 
+               brewer.pal(9, "Set1")[3], 
+               brewer.pal(3, "Greys")[1], 
+               brewer.pal(9, "Set1")[2], 
+               brewer.pal(8, "Dark2")[1], 
+               brewer.pal(9, "Set1")[4], 
+               brewer.pal(12, "Set3")[1], brewer.pal(12, "Set3")[7], brewer.pal(12, "Set3")[11], 
+               brewer.pal(9, "Set1")[5], brewer.pal(12, "Set3")[6], brewer.pal(8, "Set2")[7], 
+               brewer.pal(9, "Set1")[8], brewer.pal(12, "Set3")[12], brewer.pal(12, "Set3")[8], brewer.pal(12, "Set3")[2], 
+               brewer.pal(9, "Set1")[7], brewer.pal(12, "Set3")[5], brewer.pal(12, "Set3")[9]) 
+
+V(g)$color <- mycolours[V(g)$lipid.family.index]
+
+
+modul.louvian <- cluster_louvain(g, weights=abs(E(g)$weight))
+modul.info <- cluster_infomap(g, e.weights=abs(E(g)$weight), v.weights=NULL, nb.trials=100, modularity=TRUE)
+
+layouts <- grep("^layout_", ls("package:igraph"), value=TRUE)[-1]
+
+
+## Circle layout ##
+pdf(file = "figures/network_lipid_circle.pdf", width = 8, height = 8)
+plot(g, layout=layout_in_circle, 
+     vertex.color=V(g)$color, vertex.frame.color="grey25", vertex.size=2.5, 
+     edge.color="gray70", edge.width=(E(g)$weight*3), main="LIPID matching lipids", 
+     mark.groups=modul.louvian, mark.col=adjustcolor(c("lightsteelblue1"), alpha=.001), mark.border=NA, mark.shape=1, 
+     margin=rep(-0.05, 4), asp=0)
+legend(x=-1.2, y=-0.4, unique(lipid_family), pch=21,
+       col="#777777", pt.bg=mycolours, pt.cex=1.75, cex=.7, bty="n", ncol=1)
+dev.off()
+
+
+## Graphplot layout ##
+pdf(file = "figures/network_lipid_graphplot_294_9.pdf", width = 7.5, height = 7)
+plot(g, layout=layout_with_graphopt, 
+     vertex.color=V(g)$color, vertex.frame.color="grey25", vertex.size=2.75, 
+     edge.color="gray70", edge.width=(E(g)$weight*3), main="LIPID", 
+     mark.groups=modul.louvian, mark.col=adjustcolor(c("lightsteelblue"), alpha=.01), mark.border=NA, mark.shape=1, 
+     margin=rep(-0.04, 4), asp=0)
+legend(x=-1.33, y=+0.3, unique(lipid_family), pch=21,
+       col="#777777", pt.bg=mycolours, pt.cex=2, cex=1.1, bty="n", ncol=1)
+dev.off()
+
+
+
+
+###############################################################################
+## AusDiab vs. LIPID corpcor analysis 
+###############################################################################
+
+## AusDb --------------------------------------##
+(86436-sum(abs(ausdb.pcor)<0.0955))/2 # 1026
+sum(abs(ausdb.pcor)>0)/2 # 1026
+
+
+## LIPID --------------------------------------##
+(86436-sum(abs(lipid.pcor)<0.0895))/2 # 1025
+sum(abs(lipid.pcor)>0)/2 # 1025
+
+
+## Together -----------------------------------##
+
+# larger than 0.1 ~ 1000 edges
+sum((abs(ausdb.pcor)>=0.0955 | abs(lipid.pcor)>=0.0895))/2 # 1368
+sum((abs(ausdb.pcor)>=0.0955 & abs(lipid.pcor)>=0.0895))/2 # 683 (67% in each)
+
+# Mark those that appear in both data out of top 1000
+ausdb.pcor[abs(ausdb.pcor)>=0.0955 & abs(lipid.pcor)>=0.0895] <- 1
+lipid.pcor[abs(ausdb.pcor)>=0.0955 & abs(lipid.pcor)>=0.0895] <- 1
+
+# either to turn them to 1 or mark them for bolding...
+
+ausdb.pcor.tib <- data.frame(ausdb.pcor[1:294, 1:294]) %>% rownames_to_column("rownames") %>% as_tibble()
+colnames(ausdb.pcor.tib) <- c("rownames", ausdb.pcor.tib$rownames)
+write_csv(ausdb.pcor.tib, "results/pcor_ausdb.csv")
+
+lipid.pcor.tib <- data.frame(lipid.pcor[1:294, 1:294]) %>% rownames_to_column("rownames") %>% as_tibble()
+colnames(lipid.pcor.tib) <- c("rownames", lipid.pcor.tib$rownames)
+write_csv(lipid.pcor.tib, "results/pcor_lipid.csv")
+
+
+
+###############################################################################
+## Finalise AusDiab graph
+###############################################################################
+
+g <- graph_from_adjacency_matrix(
+  ausdb.pcor,
+  mode = "undirected",
+  weighted = TRUE,
+  diag = FALSE,
+  add.colnames = NULL,
+  add.rownames = NA
+)
+
+V(g); V(g)$name
+E(g); E(g)$weight; E(g)$color
+
+E(g)[E(g)$weight==1.0]$color = "dodgerblue1"
+E(g)[!E(g)$weight==1.0]$color = "grey60"
+
+lipid_family <- str_replace(V(g)$name, pattern="\\(.+\\)$", replacement="")
+lipid_family <- str_replace(lipid_family, pattern="\\(.+\\)\\ \\[.+\\]$", replacement="")
+length(unique(lipid_family)) # 19
+
+V(g)$label <- NA
+V(g)$lipid.family <- lipid_family
+
+lipid.family.index <- factor(lipid_family, labels=as.character(1:19))
+V(g)$lipid.family.index <- lipid.family.index
+
+display.brewer.all()
+# mycolours <- colorRampPalette(brewer.pal(12, "Set3"))(length(unique(lipid_family)))
+mycolours <- c(brewer.pal(9, "Set1")[1], 
+               brewer.pal(9, "Set1")[3], 
+               brewer.pal(3, "Greys")[1], 
+               brewer.pal(9, "Set1")[2], 
+               brewer.pal(8, "Dark2")[1], 
+               brewer.pal(9, "Set1")[4], 
+               brewer.pal(12, "Set3")[1], brewer.pal(12, "Set3")[7], brewer.pal(12, "Set3")[11], 
+               brewer.pal(9, "Set1")[5], brewer.pal(12, "Set3")[6], brewer.pal(8, "Set2")[7], 
+               brewer.pal(9, "Set1")[8], brewer.pal(12, "Set3")[12], brewer.pal(12, "Set3")[8], brewer.pal(12, "Set3")[2], 
+               brewer.pal(9, "Set1")[7], brewer.pal(12, "Set3")[5], brewer.pal(12, "Set3")[9]) 
+
+V(g)$color <- mycolours[V(g)$lipid.family.index]
+
+modul.louvian <- cluster_louvain(g, weights=abs(E(g)$weight))
+modul.info <- cluster_infomap(g, e.weights=abs(E(g)$weight), v.weights=NULL, nb.trials=100, modularity=TRUE)
+
+layouts <- grep("^layout_", ls("package:igraph"), value=TRUE)[-1]
+
+
+## Circle layout ##
+pdf(file = "figures/network_ausdb_circle_dblue_accent_294.pdf", width = 7.25, height = 7.25)
+plot(g, layout=layout_in_circle, 
+     vertex.color=V(g)$color, vertex.frame.color="grey25", vertex.size=2.8, 
+     edge.color=E(g)$color, edge.width=(E(g)$weight*1.25), main="AusDiab", 
+     mark.groups=modul.louvian, mark.col=adjustcolor(c("lightsteelblue1"), alpha=.001), mark.border=NA, mark.shape=1, 
+     margin=rep(-0.04, 4), asp=0)
+legend(x=-1.35, y=+0.25, unique(lipid_family), pch=21,
+       col="#777777", pt.bg=mycolours, pt.cex=2, cex=1.1, bty="n", ncol=1)
+dev.off()
+
+
+###############################################################################
+## Finalise LIPID graph
+###############################################################################
+
+g <- graph_from_adjacency_matrix(
+  lipid.pcor,
+  mode = "undirected",
+  weighted = TRUE,
+  diag = FALSE,
+  add.colnames = NULL,
+  add.rownames = NA
+)
+
+V(g); V(g)$name
+E(g); E(g)$weight; E(g)$color
+
+E(g)[E(g)$weight==1.0]$color = "dodgerblue1"
+E(g)[!E(g)$weight==1.0]$color = "grey60"
+
+lipid_family <- str_replace(V(g)$name, pattern="\\(.+\\)$", replacement="")
+lipid_family <- str_replace(lipid_family, pattern="\\(.+\\)\\ \\[.+\\]$", replacement="")
+length(unique(lipid_family)) # 19
+
+V(g)$label <- NA
+V(g)$lipid.family <- lipid_family
+
+lipid.family.index <- factor(lipid_family, labels=as.character(1:19))
+V(g)$lipid.family.index <- lipid.family.index
+
+display.brewer.all()
+# mycolours <- colorRampPalette(brewer.pal(12, "Set3"))(length(unique(lipid_family)))
+mycolours <- c(brewer.pal(9, "Set1")[1], 
+               brewer.pal(9, "Set1")[3], 
+               brewer.pal(3, "Greys")[1], 
+               brewer.pal(9, "Set1")[2], 
+               brewer.pal(8, "Dark2")[1], 
+               brewer.pal(9, "Set1")[4], 
+               brewer.pal(12, "Set3")[1], brewer.pal(12, "Set3")[7], brewer.pal(12, "Set3")[11], 
+               brewer.pal(9, "Set1")[5], brewer.pal(12, "Set3")[6], brewer.pal(8, "Set2")[7], 
+               brewer.pal(9, "Set1")[8], brewer.pal(12, "Set3")[12], brewer.pal(12, "Set3")[8], brewer.pal(12, "Set3")[2], 
+               brewer.pal(9, "Set1")[7], brewer.pal(12, "Set3")[5], brewer.pal(12, "Set3")[9]) 
+
+V(g)$color <- mycolours[V(g)$lipid.family.index]
+
+modul.louvian <- cluster_louvain(g, weights=abs(E(g)$weight))
+modul.info <- cluster_infomap(g, e.weights=abs(E(g)$weight), v.weights=NULL, nb.trials=100, modularity=TRUE)
+
+
+## Circle layout ##
+pdf(file = "figures/network_lipid_circle_dblue_accent_294.pdf", width = 7.25, height = 7.25)
+plot(g, layout=layout_in_circle, 
+     vertex.color=V(g)$color, vertex.frame.color="grey25", vertex.size=2.8, 
+     edge.color=E(g)$color, edge.width=(E(g)$weight*1.25), main="LIPID", 
+     mark.groups=modul.louvian, mark.col=adjustcolor(c("lightsteelblue1"), alpha=.001), mark.border=NA, mark.shape=1, 
+     margin=rep(-0.04, 4), asp=0)
+legend(x=-1.35, y=+0.25, unique(lipid_family), pch=21,
+       col="#777777", pt.bg=mycolours, pt.cex=2, cex=1.1, bty="n", ncol=1)
+dev.off()
+
+
