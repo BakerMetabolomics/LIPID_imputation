@@ -1,4 +1,4 @@
-# LIPID Imputation NatureComms Repository
+# LIPID Imputation Repository
 This repository contains the R scripts used in the manuscript titled "Imputation of plasma lipid species to facilitate integration of lipidomic datasets" by Aleksandar Dakic, Jingqin Wu, Tingting Wang, Kevin Huynh, Natalie Mellett, Thy Duong, Habtamu B Beyene, Dianna J Magliano, Jonathan E Shaw, Melinda J Carrington, Mike Inouye, Jean Y Yang, Gemma A Figtree, John Simes, the LIPID Study Investigators, Corey Giles, and Peter Meikle.
 
 The scripts in this repository demonstrate a framework for harmonising lipidomic datasets with different levels of granularity in their lipid measurements, through imputation.
