@@ -17,11 +17,37 @@ The scripts are located in the scripts_manuscript folder and are written in R.
 - **6mv_validate_num_cat_predictions.R**: Validates the numerical and categorical predictions.
 - **code_source_data_to figures.R**: Generates figures from the source data.
 
+Simulated data can be produced by running the script **0_create_simulated_datasets.R**, which is inside the simulated_data folder.
+
 ## Usage
-To use these scripts, clone the repository and run the scripts in the order listed above. Please ensure that you have the necessary R packages installed.
+To use these scripts, clone the repository and run the scripts in the order listed above. Simulated data can be created using the R script in the simulated_data folder.
+Please ensure that you have the necessary R packages installed.
 
 ## Dependencies
-These scripts require R and several R packages. Please refer to the individual scripts for the required packages.
+The scripts were run with:
+- R (version: 4.1.2)
+- R Packages (with versions):
+  - broom (v1.0.5)
+  - corpcor (v1.6.10)
+  - doParallel (v1.0.17)
+  - ggrepel (v0.9.3)
+  - glmnet (v4.1.7)
+  - igraph (v1.4.2)
+  - magrittr (v2.0.3)
+  - openxlsx (v4.2.5.2)
+  - parallel (v4.1.2)
+  - pdist (v1.2.1)
+  - pROC (v1.18.0)
+  - RColorBrewer (v1.1.3)
+  - readxl (v1.4.2)
+  - rsample (v1.2.0)
+  - tableone (v0.13.2)
+  - tidyverse (v2.0.0)
+
+These packages are available on CRAN and can be installed using this command:
+```
+install.packages(c("broom","corpcor","doParallel","ggrepel","glmnet","igraph","magrittr","openxlsx","parallel","pdist","pROC","RColorBrewer","readxl","rsample","tableone","tidyverse"))
+```
 
 ## Data
-The data used in these scripts is not included in this repository. Please refer to the manuscript for information on how to access the data.
+The data used in these scripts is not included in this repository. Please refer to the manuscript for information on how to access the individual level data.
