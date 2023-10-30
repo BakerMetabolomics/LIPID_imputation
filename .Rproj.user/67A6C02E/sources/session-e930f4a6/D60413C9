@@ -1,0 +1,26 @@
+{
+    "id": "D60413C9",
+    "path": "~/projects/LIPID_imputation_NatureComms/scripts_manuscript/1_make_working_datasets.R",
+    "project_path": "scripts_manuscript/1_make_working_datasets.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1689138703717.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "137,81",
+        "scrollLine": "138"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1688970888,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1688970888,
+    "read_only": false,
+    "read_only_alternatives": []
+}

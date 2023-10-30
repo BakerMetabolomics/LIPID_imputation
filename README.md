@@ -8,6 +8,7 @@ The scripts are located in the scripts_manuscript folder and are written in R.
 - **1_make_working_datasets.R**: Creates the working datasets for the study.
 - **2_find_discrepant_species_AusDiab_LIPID.R**: Finds discrepant species in the AusDiab LIPID dataset.
 - **3_choose_good_predictors.R**: Selects good predictors for the imputation models.
+- **3a_transferability_across_lipid_treatment_groups.R**: Shows transferability of prediction models across treatment groups.
 - **4_choose_good_prediction_targets.R**: Chooses good prediction targets for the imputation models.
 - **5_impute_LIPID_species_w_AusDiab_models.R**: Imputes LIPID species with the AusDiab models.
 - **5m_multi_impute_measured_LIPID_species.R**: Performs multiple imputations on measured LIPID species.
@@ -15,13 +16,16 @@ The scripts are located in the scripts_manuscript folder and are written in R.
 - **6m_validate_CVD_lipid_assoc_all.R**: Validates the associations between cardiovascular disease (CVD) and all lipid species.
 - **6m_validate_CVD_lipid_assoc_measured.R**: Validates the associations between CVD and measured lipid species.
 - **6mv_validate_num_cat_predictions.R**: Validates the numerical and categorical predictions.
-- **code_source_data_to figures.R**: Generates figures from the source data.
+- **7_validate_AusDiab_to_SAFHS_imputation.R**: Validates imputation of SAFHS lipids with the AusDiab models.
+- **code_source_data_to_figures.R**: Generates figures from the source data.
 
 Simulated data can be produced by running the script **0_create_simulated_datasets.R**, which is inside the simulated_data folder.
 
 ## Usage
 To use these scripts, clone the repository and run the scripts in the order listed above. Simulated data can be created using the R script in the simulated_data folder.
 Please ensure that you have the necessary R packages installed.
+
+To reproduce all figures, use the source_data.xlsx file (inside the figures_source folder) and the script **code_source_data_to_figures.R**
 
 ## Dependencies
 The scripts were run with:
