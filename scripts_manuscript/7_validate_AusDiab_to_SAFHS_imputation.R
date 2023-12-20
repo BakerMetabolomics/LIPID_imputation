@@ -5,7 +5,7 @@
 ## Test transferability of AusDiab models to SAFHS by predicting the same set 
 ## of masked lipids in AusDiab and SAFHS, using the models built in AusDiab 
 ##
-## Corresponds to results in Figure 9. and Supp. Figure 4.
+## Corresponds to results in Figure 9. and Supp. Figure 5.
 ##############################################################################
 
 library("BakerMetabolomics")
@@ -145,7 +145,7 @@ ggplot(tibble(x=0:20, y=exclude_predictors_pcor_measure$mad_1.75$frobenius_ave[1
   geom_vline(aes(xintercept=6), linetype="dotted", size=0.4) + 
   geom_vline(aes(xintercept=12), linetype="dotted", size=0.4) + 
   theme(axis.text=element_text(size=6))   
-ggsave("figures/adj_average_pcor_sq_dist_ausdb_safhs_supp4b.pdf", width=8, height=6, scale=1, units="cm")
+ggsave("figures/adj_average_pcor_sq_dist_ausdb_safhs_supp5b.pdf", width=8, height=6, scale=1, units="cm")
 
 scales::scientific
 scale_y_continuous(label=function(x) format(x, scientific = TRUE))
@@ -162,7 +162,7 @@ ggplot(dist_df, aes(dist)) +
   scale_y_continuous(breaks=c(0,25,50)) + 
   facet_wrap(~excluded, scales="fixed", ncol=4) + 
   theme(axis.text=element_text(size=5)) 
-ggsave("figures/adj_distribution_of_pcor_sq_dist_ausdb_safhs_supp4a.pdf", width=10, height=8, scale=1, units="cm")
+ggsave("figures/adj_distribution_of_pcor_sq_dist_ausdb_safhs_supp5a.pdf", width=10, height=8, scale=1, units="cm")
 
 
 ## 12 predictors to exclude
@@ -325,7 +325,7 @@ saveRDS(AusDb_SAFHS_predict, 'results/AusDb_SAFHS_target_predictions_accuracy.rd
 
 
 ## Figures ----------------------------------------------##
-# focused cor 0.4-1
+# focused cor 0.3-1
 ggplot(data=AusDb_SAFHS_predict$prediction_accuracies, 
        aes(x=AusDiab_test, y=SAFHS)) + 
   geom_point(size=1.75, alpha=0.6, colour="indianred2", stroke=0.4) + 
@@ -335,27 +335,10 @@ ggplot(data=AusDb_SAFHS_predict$prediction_accuracies,
   geom_abline(slope=1, intercept=0, colour="grey30", linewidth=0.4) + 
   geom_abline(slope=1, intercept=-0.2, colour="grey50", linewidth=0.15) + 
   geom_abline(slope=1, intercept=0.2, colour="grey50", linewidth=0.15) + 
-  theme_bw(base_size=8) + 
-  scale_x_continuous(limits=c(0.4,1), breaks=seq(0.4,1,0.1)) + 
-  scale_y_continuous(limits=c(0.4,1), breaks=seq(0.4,1,0.1)) + 
+  theme_bw(base_size=7) + 
+  scale_x_continuous(limits=c(0.3,1), breaks=seq(0.3,1,0.1)) + 
+  scale_y_continuous(limits=c(0.3,1), breaks=seq(0.3,1,0.1)) + 
   labs(x="AusDiab", y="SAFHS") + 
   theme(axis.text=element_text(size=6))
-ggsave("figures/validation_heterogeneity_Ausdiab12_SAFHS_9a_focused.pdf", width=9, height=9, scale=1, units="cm")
-
-# full view cor 0.1-01
-ggplot(data=AusDb_SAFHS_predict$prediction_accuracies, 
-       aes(x=AusDiab_test, y=SAFHS)) + 
-  geom_point(size=1.75, alpha=0.6, colour="indianred2", stroke=0.4) + 
-  geom_label_repel(aes(label=ifelse(abs(AusDiab_test-SAFHS)>0.2, lipid,'')), 
-                   box.padding=0.2, label.padding=0.075, point.padding=0.25, label.r=0.1, label.size=0.1, max.time=5, force=2, force_pull=1, 
-                   segment.color='grey50', segment.size=0.2, min.segment.length=0.2, size=1.75, nudge_x=-0.01, nudge_y=-0.01, max.overlaps=30) + 
-  geom_abline(slope=1, intercept=0, colour="grey30", linewidth=0.4) + 
-  geom_abline(slope=1, intercept=-0.2, colour="grey50", linewidth=0.15) + 
-  geom_abline(slope=1, intercept=0.2, colour="grey50", linewidth=0.15) + 
-  theme_bw(base_size=8) + 
-  scale_x_continuous(limits=c(0.08,1), breaks=seq(0.1,1,0.1)) + 
-  scale_y_continuous(limits=c(0.08,1), breaks=seq(0.1,1,0.1)) + 
-  labs(x="AusDiab", y="SAFHS") + 
-  theme(axis.text=element_text(size=6))
-ggsave("figures/validation_heterogeneity_Ausdiab12_SAFHS_9a.pdf", width=9, height=9, scale=1, units="cm")
+ggsave("figures/validation_heterogeneity_Ausdiab12_SAFHS_9a_focused.pdf", width=9, height=8.8, scale=1, units="cm")
 

@@ -4,6 +4,7 @@ library("tidyverse")
 library("readxl")
 library("igraph")
 library("RColorBrewer")
+library("ggrepel")
 
 
 
@@ -11,11 +12,11 @@ library("RColorBrewer")
 ## Figure 1
 ###############################################################################
 
-fig_1a <- read_xlsx("source_data.xlsx", sheet=1)
+fig_1a <- read_xlsx("figures_source/source_data.xlsx", sheet=1)
 
 ggplot(fig_1a, aes(dist)) +
-  geom_histogram(binwidth=0.03, colour="white", size=0.003, fill="royalblue3") + 
-  theme_bw(base_size=7.5) + 
+  geom_histogram(binwidth=0.03, colour="white", linewidth=0.003, fill="royalblue3") + 
+  theme_bw(base_size=7) + 
   labs(x="Squared distance") + 
   scale_y_continuous(breaks=c(0,25,50)) + 
   facet_wrap(~excluded, scales="fixed", ncol=4) + 
@@ -23,7 +24,7 @@ ggplot(fig_1a, aes(dist)) +
 ggsave("figures_source/fig1a.pdf", width=10, height=8, scale=1, units="cm")
 
 
-fig_1b <- read_xlsx("source_data.xlsx", sheet=2)
+fig_1b <- read_xlsx("figures_source/source_data.xlsx", sheet=2)
 
 scientific_10 <- function(x) {
   parse(text=gsub("e", " %*% 10^", scales::scientific_format()(x)))
@@ -31,7 +32,7 @@ scientific_10 <- function(x) {
 ggplot(tibble(x=fig_1b$excluded, y=fig_1b$dist), aes(x, y)) +
   geom_line(size=0.4) + 
   geom_point(size=1.75, shape=21, fill="tomato", colour="white", stroke=0.75) +
-  theme_bw(base_size=8) + 
+  theme_bw(base_size=7) + 
   scale_y_continuous(label=scientific_10) + 
   labs(x="Number of excluded lipids", y="Average squared distance") + 
   geom_vline(aes(xintercept=9), linetype="dotted", size=0.4) + 
@@ -45,8 +46,8 @@ ggsave("figures_source/fig1b.pdf", width=8, height=6, scale=1, units="cm")
 ## Figure 2
 ###############################################################################
 
-fig_2_ausdb <- read_xlsx("source_data.xlsx", sheet=3)
-fig_2_lipid <- read_xlsx("source_data.xlsx", sheet=4)
+fig_2_ausdb <- read_xlsx("figures_source/source_data.xlsx", sheet=3)
+fig_2_lipid <- read_xlsx("figures_source/source_data.xlsx", sheet=4)
 
 
 ## AusDiab panel ##############################################################
@@ -158,34 +159,34 @@ dev.off()
 ## Figure 3
 ###############################################################################
 
-fig_3a <- read_xlsx("source_data.xlsx", sheet=5)
+fig_3a <- read_xlsx("figures_source/source_data.xlsx", sheet=5)
 
 my.colors <- c("royalblue", "firebrick1")
 subset_label <- c(All="All predictors", PCorr13="Discordant predictors removed")
 ggplot(data=fig_3a, 
        aes(x=ausdb, y=lipid)) + 
   geom_point(size=1.5, alpha=0.5, aes(colour=composite)) + 
-  geom_abline(slope=1, intercept=0, colour="grey30") + 
-  geom_abline(slope=1, intercept=-0.3, colour="grey50", size=0.25) + 
-  geom_abline(slope=1, intercept=0.3, colour="grey50", size=0.25) + 
-  theme_bw(base_size=8) + 
+  geom_abline(slope=1, intercept=0, colour="grey30", linewidth=0.4) + 
+  geom_abline(slope=1, intercept=-0.3, colour="grey50", linewidth=0.4) + 
+  geom_abline(slope=1, intercept=0.3, colour="grey50", linewidth=0.4) + 
+  theme_bw(base_size=7) + 
   scale_x_continuous(breaks=seq(0,1,0.1)) + 
   scale_y_continuous(breaks=seq(0,1,0.1)) + 
   scale_color_manual(values=my.colors) + 
   labs(x="AusDiab", y="LIPID") + 
   facet_wrap(~subset, scales="fixed", ncol=2, labeller=labeller(subset=subset_label)) + 
-  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6))
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=7), axis.text=element_text(size=6))
 ggsave("figures_source/fig3a.pdf", width=12, height=6.6, scale=1, units="cm")
 
 
-fig_3b <- read_xlsx("source_data.xlsx", sheet=6)
+fig_3b <- read_xlsx("figures_source/source_data.xlsx", sheet=6)
 
 ggplot(fig_3b, aes(delta_improvement)) +
   geom_histogram(binwidth=0.005, colour="white", size=0.1, fill="firebrick2") + 
-  theme_bw(base_size=8) + 
+  theme_bw(base_size=7) + 
   scale_x_continuous(breaks=seq(-0.05,0.15,0.05)) + 
   labs(title="Improvement in prediction accuracy", subtitle="(relative to AusDiab reference)", x="Improvement in correlation") + 
-  theme(plot.title=element_text(size=8, hjust = 0.5), plot.subtitle=element_text(size=8, hjust = 0.5), axis.text=element_text(size=6))
+  theme(plot.title=element_text(size=7, hjust = 0.5), plot.subtitle=element_text(size=7, hjust = 0.5), axis.text=element_text(size=6))
 ggsave("figures_source/fig3b.pdf", width=6, height=6, scale=1, units="cm")
 
 
@@ -194,79 +195,83 @@ ggsave("figures_source/fig3b.pdf", width=6, height=6, scale=1, units="cm")
 ## Figure 4
 ###############################################################################
 
-fig_4a <- read_xlsx("source_data.xlsx", sheet=7)
+fig_4a <- read_xlsx("figures_source/source_data.xlsx", sheet=7)
 
 my.colors <- c("royalblue4", "seagreen4")
 subset_label <- c(baseline="Baseline", followup="Follow up")
 ggplot(data=fig_4a, 
        aes(x=nontreat, y=treat)) + 
-  geom_point(size=1.5, alpha=0.5, aes(colour=timepoint)) + 
+  geom_point(size=1.4, alpha=0.5, aes(colour=timepoint), stroke=0.3) + 
   geom_abline(slope=1, intercept=0, colour="grey30") + 
-  theme_bw(base_size=8) + 
-  scale_x_continuous(breaks=seq(0,1,0.1)) + 
-  scale_y_continuous(breaks=seq(0,1,0.1)) + 
+  theme_bw(base_size=7) + 
+  scale_x_continuous(breaks=seq(0,1,0.2)) + 
+  scale_y_continuous(breaks=seq(0,1,0.2)) + 
   scale_color_manual(values=my.colors) + 
   labs(x="Placebo randomised", y="Pravastatin randomised") + 
   facet_wrap(~timepoint, scales="fixed", ncol=2, labeller=labeller(timepoint=subset_label)) + 
-  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6), legend.position="none")
-ggsave("figures_source/fig4a.pdf", width=12, height=7, scale=1, units="cm")
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=7), axis.text=element_text(size=5), 
+        legend.position="none")
+ggsave("figures_source/fig4a.pdf", width=9, height=6.25, scale=1, units="cm")
 
 
-fig_4b <- read_xlsx("source_data.xlsx", sheet=8)
+fig_4b <- read_xlsx("figures_source/source_data.xlsx", sheet=8)
 
 my.colors <- c("royalblue4", "seagreen4")
 subset_label <- c(nontreat="Placebo randomised", treat="Pravastatin randomised")
 ggplot(data=fig_4b, 
        aes(x=baseline, y=followup)) + 
-  geom_point(size=1.5, alpha=0.5, aes(colour=randomisation)) + 
+  geom_point(size=1.4, alpha=0.5, aes(colour=randomisation), stroke=0.3) + 
   geom_abline(slope=1, intercept=0, colour="grey30") + 
-  theme_bw(base_size=8) + 
-  scale_x_continuous(breaks=seq(0,1,0.1)) + 
-  scale_y_continuous(breaks=seq(0,1,0.1)) + 
+  theme_bw(base_size=7) + 
+  scale_x_continuous(breaks=seq(0,1,0.2)) + 
+  scale_y_continuous(breaks=seq(0,1,0.2)) + 
   scale_color_manual(values=my.colors) + 
   labs(x="Baseline", y="Follow up") + 
   facet_wrap(~randomisation, scales="fixed", ncol=3, labeller=labeller(randomisation=subset_label)) + 
-  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6), legend.position="none")
-ggsave("figures_source/fig4b.pdf", width=12, height=7, scale=1, units="cm")
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=7), axis.text=element_text(size=5), 
+        legend.position="none")
+ggsave("figures_source/fig4b.pdf", width=9, height=6.25, scale=1, units="cm")
 
 
 ###############################################################################
 ## Figure 5
 ###############################################################################
 
-fig_5a <- read_xlsx("source_data.xlsx", sheet=9)
+fig_5a <- read_xlsx("figures_source/source_data.xlsx", sheet=9)
 
 target_pct_label <- c('10'="90% of full predictor set", '25'="75% of full predictor set", '50'="50% of full predictor set", '75'="25% of full predictor set")
 ggplot(fig_5a, 
        aes(reorder(lipid, rep(r[1:294], 8)), r.1se, colour=data)) + 
-  geom_point(size=1, alpha=0.5) + 
-  geom_errorbar(aes(ymax=r.1se_max, ymin=r.1se_min), size=0.2) + 
-  theme_bw(base_size=8) + 
+  geom_point(size=1.2, alpha=0.5, stroke=0.25) + 
+  geom_errorbar(aes(ymax=r.1se_max, ymin=r.1se_min), size=0.15) + 
+  theme_bw(base_size=6) + 
   scale_colour_manual(values=c("dodgerblue", "tomato")) + 
   scale_x_discrete(breaks=NULL) + 
   labs(x="lipid species", y="Correlation (Range)") + 
   facet_wrap(~target_pct, scales="fixed", ncol=1, labeller=labeller(target_pct=target_pct_label)) + 
-  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6), legend.position="bottom")
-ggsave("figures_source/fig5a.pdf", width=12, height=14, scale=1, units="cm")
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=7), axis.text=element_text(size=5), 
+        legend.position="bottom", legend.title=element_blank())
+ggsave("figures_source/fig5a.pdf", width=10, height=12, scale=1, units="cm")
 
 
-fig_5b <- read_xlsx("source_data.xlsx", sheet=10)
+fig_5b <- read_xlsx("figures_source/source_data.xlsx", sheet=10)
 
 my.colors <- c("royalblue", "firebrick1")
 ggplot(data=fig_5b, 
        aes(x=r.1se_AusDiab, y=r.1se_LIPID)) + 
-  geom_point(aes(colour=composite), size=1.25, alpha=0.5) + 
-  geom_abline(slope=1, intercept=0, colour="grey30") + 
-  geom_abline(slope=1, intercept=-0.3, colour="grey50", size=0.25) + 
-  geom_abline(slope=1, intercept=0.3, colour="grey50", size=0.25) + 
-  theme_bw(base_size=8) + 
-  scale_x_continuous(breaks=seq(0,1,0.1)) + 
-  scale_y_continuous(breaks=seq(0,1,0.1)) + 
+  geom_point(aes(colour=composite), size=1.3, alpha=0.5, stroke=0.3) + 
+  geom_abline(slope=1, intercept=0, colour="grey30", linewidth=0.4) + 
+  geom_abline(slope=1, intercept=-0.3, colour="grey50", linewidth=0.2) + 
+  geom_abline(slope=1, intercept=0.3, colour="grey50", linewidth=0.2) + 
+  theme_bw(base_size=6) + 
+  scale_x_continuous(breaks=seq(0,1,0.2)) + 
+  scale_y_continuous(breaks=seq(0,1,0.2)) + 
   scale_color_manual(values=my.colors) + 
   labs(x="AusDiab", y="LIPID") + 
   facet_wrap(~target_pct, scales="fixed", ncol=2, labeller=labeller(target_pct=target_pct_label)) + 
-  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6))
-ggsave("figures_source/fig5b.pdf", width=12, height=10.5, scale=1, units="cm")
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=7), axis.text=element_text(size=5), 
+        legend.position="bottom")
+ggsave("figures_source/fig5b.pdf", width=8, height=9.25, scale=1, units="cm")
 
 
 
@@ -274,12 +279,12 @@ ggsave("figures_source/fig5b.pdf", width=12, height=10.5, scale=1, units="cm")
 ## Figure 6
 ###############################################################################
 
-fig_6 <- read_xlsx("source_data.xlsx", sheet=11)
+fig_6 <- read_xlsx("figures_source/source_data.xlsx", sheet=12)
 
 ggplot(fig_6, aes(max_corr)) +
   geom_histogram(binwidth=0.0125, colour="white", size=0.1, fill="firebrick2", alpha=0.9) + 
   geom_vline(xintercept=0.6, colour="dodgerblue", size=0.25) + 
-  theme_bw(base_size=8) + 
+  theme_bw(base_size=7) + 
   scale_x_continuous(breaks=seq(0,1,0.1)) + 
   labs(x="Correlation")
 ggsave("figures_source/fig6.pdf", width=9, height=6, scale=1, units="cm")
@@ -290,7 +295,7 @@ ggsave("figures_source/fig6.pdf", width=9, height=6, scale=1, units="cm")
 ## Figure 7
 ###############################################################################
 
-# Figure 7: generated using Excel template (provided) and source data in sheet 12
+# Figure 7: generated using Excel template (provided) and source data in sheet 13
 
 
 
@@ -298,7 +303,7 @@ ggsave("figures_source/fig6.pdf", width=9, height=6, scale=1, units="cm")
 ## Figure 8
 ###############################################################################
 
-# Figure 8: generated using Excel template (provided) and source data in sheet 13
+# Figure 8: generated using Excel template (provided) and source data in sheet 14
 
 
 
@@ -306,7 +311,7 @@ ggsave("figures_source/fig6.pdf", width=9, height=6, scale=1, units="cm")
 ## Figure 9
 ###############################################################################
 
-fig_9 <- read_xlsx("source_data.xlsx", sheet=14)
+fig_9 <- read_xlsx("figures_source/source_data.xlsx", sheet=15)
 
 ggplot(data=fig_9, 
        aes(x=AusDiab_test, y=SAFHS)) + 
@@ -317,15 +322,9 @@ ggplot(data=fig_9,
   geom_abline(slope=1, intercept=0, colour="grey30", linewidth=0.4) + 
   geom_abline(slope=1, intercept=-0.2, colour="grey50", linewidth=0.15) + 
   geom_abline(slope=1, intercept=0.2, colour="grey50", linewidth=0.15) + 
-  theme_bw(base_size=8) + 
-  scale_x_continuous(limits=c(0.08,1), breaks=seq(0.1,1,0.1)) + 
-  scale_y_continuous(limits=c(0.08,1), breaks=seq(0.1,1,0.1)) + 
+  theme_bw(base_size=7) + 
+  scale_x_continuous(limits=c(0.3,1), breaks=seq(0.3,1,0.1)) + 
+  scale_y_continuous(limits=c(0.3,1), breaks=seq(0.3,1,0.1)) + 
   labs(x="AusDiab", y="SAFHS") + 
   theme(axis.text=element_text(size=6))
-ggsave("figures_source/fig9.pdf", width=9, height=9, scale=1, units="cm")
-
-
-
-
-
-
+ggsave("figures_source/fig9.pdf", width=9, height=8.8, scale=1, units="cm")

@@ -1,5 +1,5 @@
 # LIPID Imputation Repository
-This repository contains the R scripts used in the manuscript titled "Imputation of plasma lipid species to facilitate integration of lipidomic datasets" by Aleksandar Dakic, Jingqin Wu, Tingting Wang, Kevin Huynh, Natalie Mellett, Thy Duong, Habtamu B Beyene, Dianna J Magliano, Jonathan E Shaw, Melinda J Carrington, Mike Inouye, Jean Y Yang, Gemma A Figtree, John Simes, the LIPID Study Investigators, Corey Giles, and Peter Meikle.
+This repository contains the R scripts used in the manuscript titled "Imputation of plasma lipid species to facilitate integration of lipidomic datasets" by Aleksandar Dakic, Jingqin Wu, Tingting Wang, Kevin Huynh, Natalie Mellett, Thy Duong, Habtamu B Beyene, Dianna J Magliano, Jonathan E Shaw, Melinda J Carrington, Mike Inouye, Jean Y Yang, Gemma A Figtree, Joanne E. Curran, John Blangero, John Simes, the LIPID Study Investigators, Corey Giles, and Peter Meikle.
 
 The scripts in this repository demonstrate a framework for harmonising lipidomic datasets with different levels of granularity in their lipid measurements, through imputation.
 
@@ -9,6 +9,7 @@ The scripts are located in the scripts_manuscript folder and are written in R.
 - **2_find_discrepant_species_AusDiab_LIPID.R**: Finds discrepant species in the AusDiab LIPID dataset.
 - **3_choose_good_predictors.R**: Selects good predictors for the imputation models.
 - **3a_transferability_across_lipid_treatment_groups.R**: Shows transferability of prediction models across treatment groups.
+- **3b_sex_stratified_accuracy.R**: Shows no advantage of sex-stratified models.
 - **4_choose_good_prediction_targets.R**: Chooses good prediction targets for the imputation models.
 - **5_impute_LIPID_species_w_AusDiab_models.R**: Imputes LIPID species with the AusDiab models.
 - **5m_multi_impute_measured_LIPID_species.R**: Performs multiple imputations on measured LIPID species.
@@ -29,7 +30,7 @@ To reproduce all figures, use the source_data.xlsx file (inside the figures_sour
 
 ## Dependencies
 The scripts were run with:
-- R (version: 4.1.2)
+- R (version: 4.2.1)
 - R Packages (with versions):
   - broom (v1.0.5)
   - corpcor (v1.6.10)

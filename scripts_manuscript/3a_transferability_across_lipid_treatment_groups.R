@@ -5,7 +5,7 @@
 ## lipid-treatment (pravastatin) groups by checking and comparing 
 ## predictions of lipid species shared by AusDiab & LIPID
 ##
-## Corresponds to results in Figure 4. and Supp. Figure 2.
+## Corresponds to results in Figure 4. and Supp. Figure 3.
 ##############################################################################
 
 library("tidyverse")
@@ -203,28 +203,30 @@ write_csv(cordata, 'results/data_fig_4new.csv')
 ###############################################################################
 cordata_long <- cordata %>% 
   pivot_longer(cols=baseline_nontreat:followup_treat, names_to=c("timepoint", "randomisation"), names_sep="_", values_to="value") %>% 
-  pivot_wider(names_from=randomisation, values_from=value)
+  pivot_wider(names_from=randomisation, values_from=value) %>% 
+  mutate(time=if_else(timepoint=="baseline", "Baseline", "Follow up (only pravastatin arm was exposed to treatment)"))
 
 ## Plot
 my.colors <- c("royalblue4", "seagreen4")
 subset_label <- c(baseline="Baseline", followup="Follow up")
 ggplot(data=cordata_long, 
        aes(x=nontreat, y=treat)) + 
-  geom_point(size=1.5, alpha=0.5, aes(colour=timepoint)) + 
+  geom_point(size=1.4, alpha=0.5, aes(colour=time), stroke=0.3) + 
   geom_abline(slope=1, intercept=0, colour="grey30") + 
-  theme_bw(base_size=8) + 
-  scale_x_continuous(breaks=seq(0,1,0.1)) + 
-  scale_y_continuous(breaks=seq(0,1,0.1)) + 
+  theme_bw(base_size=7) + 
+  scale_x_continuous(breaks=seq(0,1,0.2)) + 
+  scale_y_continuous(breaks=seq(0,1,0.2)) + 
   scale_color_manual(values=my.colors) + 
   labs(x="Placebo randomised", y="Pravastatin randomised") + 
   facet_wrap(~timepoint, scales="fixed", ncol=2, labeller=labeller(timepoint=subset_label)) + 
-  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6), legend.position="none")
-ggsave("figures/statin_comp_acc_timepoints_4a.pdf", width=12, height=7, scale=1, units="cm")
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=7), axis.text=element_text(size=5), 
+        legend.position="bottom", legend.title=element_blank())
+ggsave("figures/statin_comp_acc_timepoints_4a.pdf", width=9, height=6.25, scale=1, units="cm")
 
 # for nocovars version:
 my.colors <- c("royalblue1", "seagreen3")
 # ...
-ggsave("figures/statin_comp_acc_nocovars_timepoints_supp2a.pdf", width=12, height=7, scale=1, units="cm")
+ggsave("figures/statin_comp_acc_nocovars_timepoints_supp3a.pdf", width=12, height=7, scale=1, units="cm")
 
 
 ###############################################################################
@@ -232,26 +234,28 @@ ggsave("figures/statin_comp_acc_nocovars_timepoints_supp2a.pdf", width=12, heigh
 ###############################################################################
 cordata_long <- cordata %>% 
   pivot_longer(cols=baseline_nontreat:followup_treat, names_to=c("timepoint", "randomisation"), names_sep="_", values_to="value") %>% 
-  pivot_wider(names_from=timepoint, values_from=value)
+  pivot_wider(names_from=timepoint, values_from=value) %>% 
+  mutate(random=if_else(randomisation=="nontreat", "Placebo", "Pravastatin (only follow up time point exposed to treatment)"))
 
 ## Plot
 my.colors <- c("royalblue4", "seagreen4")
 subset_label <- c(nontreat="Placebo randomised", treat="Pravastatin randomised")
 ggplot(data=cordata_long, 
        aes(x=baseline, y=followup)) + 
-  geom_point(size=1.5, alpha=0.5, aes(colour=randomisation)) + 
+  geom_point(size=1.4, alpha=0.5, aes(colour=random), stroke=0.3) + 
   geom_abline(slope=1, intercept=0, colour="grey30") + 
-  theme_bw(base_size=8) + 
-  scale_x_continuous(breaks=seq(0,1,0.1)) + 
-  scale_y_continuous(breaks=seq(0,1,0.1)) + 
+  theme_bw(base_size=7) + 
+  scale_x_continuous(breaks=seq(0,1,0.2)) + 
+  scale_y_continuous(breaks=seq(0,1,0.2)) + 
   scale_color_manual(values=my.colors) + 
   labs(x="Baseline", y="Follow up") + 
   facet_wrap(~randomisation, scales="fixed", ncol=3, labeller=labeller(randomisation=subset_label)) + 
-  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=8), axis.text=element_text(size=6), legend.position="none")
-ggsave("figures/statin_comp_acc_treatgroups_4b.pdf", width=12, height=7, scale=1, units="cm")
+  theme(strip.background=element_rect(fill="white", colour="white"), strip.text=element_text(face=NULL, size=7), axis.text=element_text(size=5), 
+        legend.position="bottom", legend.title=element_blank())
+ggsave("figures/statin_comp_acc_treatgroups_4b.pdf", width=9, height=6.25, scale=1, units="cm")
 
 # for nocovars version:
 my.colors <- c("royalblue1", "seagreen3")
 # ...
-ggsave("figures/statin_comp_acc_nocovars_treatgroups_supp2a.pdf", width=12, height=7, scale=1, units="cm")
+ggsave("figures/statin_comp_acc_nocovars_treatgroups_supp3a.pdf", width=12, height=7, scale=1, units="cm")
 

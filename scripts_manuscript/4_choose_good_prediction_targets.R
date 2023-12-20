@@ -4,7 +4,7 @@
 ## Test predictability of lipids missing in LIPID trial within AusDiab 
 ## by comparing observed and predicted AusDiab values 
 ##
-## Corresponds to results in Figure 6. and Supplementary Table 5.
+## Corresponds to results in Figure 6. and Supplementary Table 3.
 ##############################################################################
 
 library("tidyverse")
@@ -215,7 +215,7 @@ count(predictable_lipids_alphas, best_alpha)
 ggplot(corr522_alpha_series, aes(max_corr)) +
   geom_histogram(binwidth=0.0125, colour="white", size=0.1, fill="firebrick2", alpha=0.9) + 
   geom_vline(xintercept=0.6, colour="dodgerblue", size=0.25) + 
-  theme_bw(base_size=8) + 
+  theme_bw(base_size=7) + 
   scale_x_continuous(breaks=seq(0,1,0.1)) + 
   labs(x="Correlation")
 ggsave("figures/adj_histogram_predict_ausdb_corr522_6.pdf", width=9, height=6, scale=1, units="cm")

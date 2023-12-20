@@ -137,15 +137,13 @@ scientific_10 <- function(x) {
 ggplot(tibble(x=0:21, y=exclude_predictors_pcor_measure$mad_2$frobenius_ave), aes(x, y)) +
   geom_line(size=0.4) + 
   geom_point(size=1.75, shape=21, fill="tomato", colour="white", stroke=0.75) +
-  theme_bw(base_size=8) + 
+  theme_bw(base_size=7) + 
   scale_y_continuous(label=scientific_10) + 
   labs(x="Number of excluded lipids", y="Average squared distance") + 
   geom_vline(aes(xintercept=9), linetype="dotted", size=0.4) + 
   geom_vline(aes(xintercept=13), linetype="dotted", size=0.4) + 
   theme(axis.text=element_text(size=6))   
 ggsave("figures/adj_average_pcor_sq_dist.pdf", width=8, height=6, scale=1, units="cm")
-ggsave("figures/adj_average_pcor_sq_dist.tiff", width=8, height=6, scale=1, units="cm")
-ggsave("figures/adj_average_pcor_sq_dist.svg", width=8, height=6, scale=1, units="cm")
 
 scales::scientific
 scale_y_continuous(label=function(x) format(x, scientific = TRUE))
@@ -157,14 +155,12 @@ dist_df <- tibble(dist=unlist(exclude_predictors_pcor_measure$mad_2$pcor_dist_se
 
 ggplot(dist_df, aes(dist)) +
   geom_histogram(binwidth=0.03, colour="white", size=0.003, fill="royalblue3") + 
-  theme_bw(base_size=7.5) + 
+  theme_bw(base_size=7) + 
   labs(x="Squared distance") + 
   scale_y_continuous(breaks=c(0,25,50)) + 
   facet_wrap(~excluded, scales="fixed", ncol=4) + 
   theme(axis.text=element_text(size=5)) 
 ggsave("figures/adj_distribution_of_pcor_sq_dist.pdf", width=10, height=8, scale=1, units="cm")
-ggsave("figures/adj_distribution_of_pcor_sq_dist.tiff", width=10, height=8, scale=1, units="cm")
-ggsave("figures/adj_distribution_of_pcor_sq_dist.svg", width=10, height=8, scale=1, units="cm")
 
 
 ## Table excluded predictors
